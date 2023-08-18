@@ -1,0 +1,62 @@
+# `dist/index.js` is a special file in Actions.
+# When you reference an action with `uses:` in a workflow,
+# `index.js` is the code that will run.
+# For our project, we generate this file through a build process from other source files.
+# We need to make sure the checked-in `index.js` actually matches what we expect it to be.
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set Node.js 16.x
+        uses: actions/setup-node@v3.6.0
+        with:
+          node-version: 16.x
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild the dist/ directory
+        run: |
+          npm run build
+
+      - name: Deploy Function
+        id: sls-func
+        uses: yc-actions/yc-sls-function@v2
+        with:
+            yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+            bucket: ${{ secrets.BUCKET }}
+            folder-id: 'b1gca87bp8ih4ecupf9r'
+            service-account: 'ajeu45eat8ckki29kei1'
+            function-name: 'cache-currency-handler'
+            runtime: 'nodejs16'
+            memory: '128Mb'
+            entrypoint: 'dist/index.handler'
+            execution-timeout: 1
+            environment: |
+                S3_ENDPOINT=https://storage.yandexcloud.net
+                DST_BUCKET=cache-currency
+                DATA_ENDPOINT=https://www.cbr-xml-daily.ru/daily_json.js
+            secrets: |
+                AWS_ACCESS_KEY_ID=e6q8js26tn6kni136mbi/e6qaqdhhq0fpet6h6km1/key_id
+                AWS_SECRET_ACCESS_KEY=e6q8js26tn6kni136mbi/e6qaqdhhq0fpet6h6km1/secret
+            include: | 
+                ./dist
+                package.json
+            exclude: | 
+                **/*.ts
